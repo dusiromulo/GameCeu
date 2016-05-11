@@ -1,0 +1,249 @@
+#include "sdl.ceu"
+#include "sdl-gfx.ceu"
+
+input void SDL_QUIT;
+input void SDL_REDRAW;
+input int SDL_DT;
+input _SDL_KeyboardEvent&& SDL_KEYDOWN;
+
+native do
+    SDL_Renderer* REN = NULL;
+    int REN_W, REN_H;
+    ##define ID(x) x
+end
+native @pure _ID();
+
+var _SDL_Window&? win;
+    finalize
+        win = &_SDL_CreateWindow("Run Pikachu!!!",
+                _SDL_WINDOWPOS_UNDEFINED, _SDL_WINDOWPOS_UNDEFINED,
+                1024, 768, _SDL_WINDOW_SHOWN);
+    with
+        _SDL_DestroyWindow(&&win!);
+    end
+
+_SDL_GetWindowSize(&&win!, &&_REN_W, &&_REN_H);
+
+finalize
+    _REN = _SDL_CreateRenderer(&&win!, -1, 0);
+with
+    _SDL_DestroyRenderer(_REN);
+end
+
+native do
+    SDL_Texture *TEX_PIKACHU, *TEX_POKEBALL, *BACKGROUND;
+end
+    finalize
+        _TEX_PIKACHU = _IMG_LoadTexture(_REN, "pikachu.png");
+    with
+        _SDL_DestroyTexture(_TEX_PIKACHU);
+    end
+    finalize
+        _TEX_POKEBALL = _IMG_LoadTexture(_REN, "pokeball.png");
+    with
+        _SDL_DestroyTexture(_TEX_POKEBALL);
+    end
+    finalize
+        _BACKGROUND = _IMG_LoadTexture(_REN, "pokemon.png");
+    with
+        _SDL_DestroyTexture(_BACKGROUND);
+    end
+
+#define G_FORCE 100
+#define FROM_LEFT -1
+#define FROM_RIGHT -2
+
+native do
+    int pikachuCaught;
+end
+
+class Pokeball with
+    var _SDL_Renderer& ren;
+    var _SDL_Rect r;
+    var int speedX;
+    var int initialSpeedY;
+do
+    var int direction;
+    if _rand() % 2 == 0 then
+        this.r.x = 0;
+        direction = FROM_LEFT;
+    else
+        this.r.x = 1000;
+        direction = FROM_RIGHT;
+    end
+
+    par/or do
+        par/or do
+            var int initialDt = _SDL_GetTicks();
+            var int initialX = r.x;
+            var int initialY = r.y;
+            loop do
+                var int currentDt = _SDL_GetTicks() - initialDt;
+                var float distanceX = currentDt*this.speedX/1000;
+
+                if direction == FROM_LEFT then
+                    r.x = initialX + distanceX;
+                    if r.x > 1000 then
+                        break;
+                    end
+                else/if direction == FROM_RIGHT then
+                    r.x = initialX - distanceX;
+                    if r.x < 0 then
+                        break;
+                    end
+                end
+
+                var float currVelY = this.initialSpeedY + G_FORCE*currentDt*currentDt/500000;
+                var float distanceY = currVelY*currentDt/1000;
+
+                r.y = initialY + distanceY;
+                if r.y > 768 then
+                    break;
+                end
+                await 10 ms;
+            end
+        with
+            loop do
+                if _pikachuCaught == true then
+                    break;
+                end
+                await 10ms;
+            end
+        end
+    with
+        every SDL_REDRAW do
+            if not _pikachuCaught then
+                _SDL_RenderCopy(&&ren, _TEX_POKEBALL, null, &&r);
+            end
+        end
+    end
+end
+
+class Pikachu with
+    var _SDL_Renderer& ren;
+    var _SDL_Rect r;
+do
+    var int timeLastJump = 0;
+    var float speedX = 0, speedY = 0, initialSpeedY = 0;
+
+    par/or do
+        par do
+            every key in SDL_KEYDOWN do
+                if key:keysym.sym == _SDLK_UP then
+                    speedY = -50;
+                    initialSpeedY = -50;
+                    timeLastJump = _SDL_GetTicks();
+                else/if key:keysym.sym == _SDLK_DOWN then
+                    if speedY > 0 then
+                        speedY = speedY + 20;
+                    end
+                else/if key:keysym.sym == _SDLK_LEFT then
+                    speedX = -500;
+                else/if key:keysym.sym == _SDLK_RIGHT then
+                    speedX = 500;
+                end
+            end
+        with
+            loop do
+                var int dt = await SDL_DT;
+                if speedY != 0 then
+                    var int currentDt = _SDL_GetTicks() - timeLastJump;
+                    var float distanceY = speedY*currentDt/1000;
+                    if r.y + distanceY >= 0 then
+                        r.y = r.y + distanceY;
+                    else
+                        speedY = 20;
+                    end
+
+                    speedY = initialSpeedY + G_FORCE*currentDt*currentDt/500000;
+                    if r.y >= 668 then
+                        r.y = 668;
+                        speedY = 0;
+                    end
+
+                    if speedX != 0 then
+                        var float distanceX = dt*speedX/1000;
+                        if r.x + distanceX < 1024 and r.x + distanceX > 0 then
+                            r.x = r.x + distanceX;
+                        end
+                    end
+                end
+                
+                if speedX != 0 and speedY == 0 then
+                    var float distanceX = dt*speedX/1000;
+
+                    if r.x + distanceX < 1024 and r.x + distanceX > 0 then
+                        r.x = r.x + distanceX;
+                    end
+
+                    speedX = speedX - speedX/10;
+
+                    if speedX < 5 and -speedX < 5 then
+                        speedX = 0;
+                    end
+                end
+            end
+        end
+    with
+        loop do
+            if _pikachuCaught then
+                await 10000 ms;
+                break;
+            end
+            await 10 ms;
+        end
+    with
+        every SDL_REDRAW do
+            if _pikachuCaught then
+                _SDL_RenderCopy(&&ren, _TEX_POKEBALL, null, &&r);
+            else
+                _SDL_RenderCopy(&&ren, _TEX_PIKACHU, null, &&r);
+            end
+        end
+    end
+end
+
+par/or do
+    every SDL_REDRAW do
+        _SDL_SetRenderDrawColor(_REN, 0x00,0x00,0x00, 0xFF);
+        _SDL_RenderFillRect(_REN, null);
+    end
+with
+    pool Pokeball[] pokeballs;
+    pool Pikachu[1] pikachus;
+    spawn Pikachu in pikachus with
+        this.ren   = &_ID(_REN);
+        this.r     = _SDL_Rect(496, 668, 76, 100);
+    end;
+
+    par do
+        every 500 ms do
+            if not _pikachuCaught then
+                spawn Pokeball in pokeballs with
+                    this.ren   = &_ID(_REN);
+                    this.r     = _SDL_Rect(0, _rand() % 768, 40, 40);
+                    this.speedX = 300 + _rand()%600;
+                    this.initialSpeedY = -150 + _rand()%100;
+                end;
+            end
+        end
+    with  
+        every SDL_DT do
+            loop pikachu in pikachus do
+                loop pokeball in pokeballs do
+                    if _SDL_HasIntersection(&&pikachu:r, &&pokeball:r) then
+                        _pikachuCaught = true;
+                    end
+                end
+            end
+        end
+    end
+with
+    every SDL_REDRAW do
+        _SDL_RenderPresent(_REN);
+    end
+with
+    await SDL_QUIT;
+end
+
+escape 0;
