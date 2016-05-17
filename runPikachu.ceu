@@ -31,7 +31,7 @@ with
 end
 
 native do
-    SDL_Texture *TEX_PIKACHU, *TEX_POKEBALL, *BACKGROUND;
+    SDL_Texture *TEX_PIKACHU, *TEX_POKEBALL;
 end
     finalize
         _TEX_PIKACHU = _IMG_LoadTexture(_REN, "pikachu.png");
@@ -42,11 +42,6 @@ end
         _TEX_POKEBALL = _IMG_LoadTexture(_REN, "pokeball.png");
     with
         _SDL_DestroyTexture(_TEX_POKEBALL);
-    end
-    finalize
-        _BACKGROUND = _IMG_LoadTexture(_REN, "pokemon.png");
-    with
-        _SDL_DestroyTexture(_BACKGROUND);
     end
 
 #define G_FORCE 100
@@ -68,15 +63,14 @@ do
         this.r.x = 0;
         direction = FROM_LEFT;
     else
-        this.r.x = 1000;
+        this.r.x = _REN_W;
         direction = FROM_RIGHT;
     end
 
     par/or do
         par/or do
             var int initialDt = _SDL_GetTicks();
-            var int initialX = r.x;
-            var int initialY = r.y;
+            var int initialX = r.x, initialY = r.y;
             loop do
                 var int currentDt = _SDL_GetTicks() - initialDt;
                 var float distanceX = currentDt*this.speedX/1000;
@@ -97,7 +91,7 @@ do
                 var float distanceY = currVelY*currentDt/1000;
 
                 r.y = initialY + distanceY;
-                if r.y > 768 then
+                if r.y > _REN_H then
                     break;
                 end
                 await 10 ms;
@@ -163,7 +157,7 @@ do
 
                     if speedX != 0 then
                         var float distanceX = dt*speedX/1000;
-                        if r.x + distanceX < 1024 and r.x + distanceX > 0 then
+                        if r.x + distanceX < _REN_W and r.x + distanceX > 0 then
                             r.x = r.x + distanceX;
                         end
                     end
@@ -172,7 +166,7 @@ do
                 if speedX != 0 and speedY == 0 then
                     var float distanceX = dt*speedX/1000;
 
-                    if r.x + distanceX < 1024 and r.x + distanceX > 0 then
+                    if r.x + distanceX < _REN_W and r.x + distanceX > 0 then
                         r.x = r.x + distanceX;
                     end
 
@@ -221,7 +215,7 @@ with
             if not _pikachuCaught then
                 spawn Pokeball in pokeballs with
                     this.ren   = &_ID(_REN);
-                    this.r     = _SDL_Rect(0, _rand() % 768, 40, 40);
+                    this.r     = _SDL_Rect(0, _rand() % _REN_H, 40, 40);
                     this.speedX = 300 + _rand()%600;
                     this.initialSpeedY = -150 + _rand()%100;
                 end;
